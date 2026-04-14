@@ -2,59 +2,123 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Extrator de XML Simples</title>
+    <title>Extrator NFe Pro</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; line-height: 1.6; max-width: 600px; margin: auto; background: #f4f4f9; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .field-box { display: flex; justify-content: space-between; align-items: center; background: #eee; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
-        button { cursor: pointer; background: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 3px; }
-        button:hover { background: #0056b3; }
-        input[type="file"] { margin-bottom: 20px; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f4f7f6; color: #333; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2, h3 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-top: 30px; }
+        .upload-box { border: 2px dashed #3498db; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px; background: #ebf5fb; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+        .card { background: #fff; border: 1px solid #ddd; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .label { font-size: 0.75rem; font-weight: bold; color: #7f8c8d; display: block; text-transform: uppercase; }
+        .value { font-size: 0.9rem; word-break: break-all; font-weight: 500; }
+        button { cursor: pointer; background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.75rem; transition: 0.2s; }
+        button:hover { background: #2980b9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.8rem; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f8f9fa; position: sticky; top: 0; }
+        .copy-cell { text-align: center; }
+        tr:hover { background: #f9f9f9; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>Extrair Dados do XML</h2>
+
+<div class="container">
+    <h2>Extrator de XML NFe</h2>
+    <div class="upload-box">
+        <p>Arraste ou selecione o arquivo XML da Nota Fiscal</p>
         <input type="file" id="xmlInput" accept=".xml">
-        <div id="resultado"></div>
     </div>
 
-    <script>
-        document.getElementById('xmlInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+    <div id="resultado"></div>
+</div>
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(e.target.result, "text/xml");
-                
-                // --- CONFIGURAÇÃO DOS CAMPOS ---
-                // Aqui você me dirá quais nomes aparecem no seu XML
-                const camposParaExtrair = ["nome", "valor", "data", "placa"]; 
-                
-                let htmlGerado = "";
+<script>
+    document.getElementById('xmlInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
 
-                camposParaExtrair.forEach(campo => {
-                    const elemento = xmlDoc.getElementsByTagName(campo)[0];
-                    const valor = elemento ? elemento.textContent : "Não encontrado";
-                    
-                    htmlGerado += `
-                        <div class="field-box">
-                            <span><strong>${campo.toUpperCase()}:</strong> ${valor}</span>
-                            <button onclick="copiarTexto('${valor}')">Copiar</button>
-                        </div>`;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(e.target.result, "text/xml");
+            
+            const getT = (tag, root = xml) => root.getElementsByTagName(tag)[0]?.textContent || "---";
+
+            let res = "<h3>Dados Gerais e Emitente</h3>";
+            res += `<div class='grid'>
+                ${cCard("Chave de Acesso", getT("chNFe"))}
+                ${cCard("Número da Nota", getT("nNF"))}
+                ${cCard("Data Emissão", getT("dhEmi").substring(0,10))}
+                ${cCard("Valor Total (vNF)", getT("vNF"))}
+                ${cCard("Nome Emitente", getT("xNome"))}
+                ${cCard("CNPJ Emitente", getT("CNPJ"))}
+                ${cCard("Inscr. Estadual (IE)", getT("IE"))}
+            </div>`;
+
+            // Faturas (Cobranca)
+            const dups = xml.getElementsByTagName("dup");
+            if(dups.length > 0) {
+                res += "<h3>Faturas e Vencimentos (Cobr)</h3><div class='grid'>";
+                Array.from(dups).forEach(d => {
+                    const infoFatura = `Venc: ${getT("dVenc", d)} - Valor: ${getT("vDup", d)}`;
+                    res += cCard(`Parcela ${getT("nDup", d)}`, infoFatura);
                 });
+                res += "</div>";
+            }
 
-                document.getElementById('resultado').innerHTML = htmlGerado;
-            };
-            reader.readAsText(file);
+            // Itens da Nota
+            const itens = xml.getElementsByTagName("det");
+            res += "<h3>Itens da Nota (Produtos)</h3>";
+            res += "<table><thead><tr>" + 
+                   "<th>Item</th><th>Produto (xProd)</th><th>EAN</th><th>NCM</th><th>CEST</th><th>CFOP</th><th>Qtd</th><th>V. Unit</th><th>Copiar</th>" +
+                   "</tr></thead><tbody>";
+
+            Array.from(itens).forEach(i => {
+                const nItem = i.getAttribute("nItem");
+                const p = i.getElementsByTagName("prod")[0];
+                
+                const d = {
+                    nome: getT("xProd", p),
+                    ean: getT("cEAN", p),
+                    ncm: getT("NCM", p),
+                    cest: getT("CEST", p),
+                    cfop: getT("CFOP", p),
+                    qtd: getT("qCom", p),
+                    vUnit: getT("vUnCom", p)
+                };
+
+                res += `<tr>
+                    <td>${nItem}</td>
+                    <td>${d.nome}</td>
+                    <td>${d.ean}</td>
+                    <td>${d.ncm}</td>
+                    <td>${d.cest}</td>
+                    <td>${d.cfop}</td>
+                    <td>${d.qtd}</td>
+                    <td>${d.vUnit}</td>
+                    <td class="copy-cell"><button onclick="copiar('${d.nome} | Qtd: ${d.qtd} | Val: ${d.vUnit}')">Resumo</button></td>
+                </tr>`;
+            });
+            res += "</tbody></table>";
+
+            document.getElementById('resultado').innerHTML = res;
+        };
+        reader.readAsText(file);
+    });
+
+    function cCard(label, valor) {
+        return `<div class="card">
+            <div><span class="label">${label}</span><span class="value" id="val-${label}">${valor}</span></div>
+            <button onclick="copiar('${valor}')">Copiar</button>
+        </div>`;
+    }
+
+    function copiar(t) {
+        navigator.clipboard.writeText(t).then(() => {
+            console.log("Copiado: " + t);
         });
-
-        function copiarTexto(texto) {
-            navigator.clipboard.writeText(texto);
-            alert("Copiado: " + texto);
-        }
-    </script>
+    }
+</script>
 </body>
 </html>
