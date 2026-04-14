@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Extrator NFe Pro</title>
+    <title>Extrator NFe - Formato BR</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f4f7f6; color: #333; }
         .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
@@ -11,13 +11,12 @@
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
         .card { background: #fff; border: 1px solid #ddd; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
         .label { font-size: 0.75rem; font-weight: bold; color: #7f8c8d; display: block; text-transform: uppercase; }
-        .value { font-size: 0.9rem; word-break: break-all; font-weight: 500; }
-        button { cursor: pointer; background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.75rem; transition: 0.2s; }
+        .value { font-size: 0.9rem; font-weight: 500; }
+        button { cursor: pointer; background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.75rem; }
         button:hover { background: #2980b9; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.8rem; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f8f9fa; position: sticky; top: 0; }
-        .copy-cell { text-align: center; }
+        th { background: #f8f9fa; }
         tr:hover { background: #f9f9f9; }
     </style>
 </head>
@@ -26,7 +25,7 @@
 <div class="container">
     <h2>Extrator de XML NFe</h2>
     <div class="upload-box">
-        <p>Arraste ou selecione o arquivo XML da Nota Fiscal</p>
+        <p>Selecione o arquivo XML da Nota Fiscal</p>
         <input type="file" id="xmlInput" accept=".xml">
     </div>
 
@@ -34,6 +33,19 @@
 </div>
 
 <script>
+    // Função para formatar data de AAAA-MM-DD para DD/MM/AAAA
+    function formatarDataBR(dataISO) {
+        if (!dataISO || dataISO === "---") return "---";
+        const partes = dataISO.split('-');
+        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+
+    // Função para formatar moeda
+    function formatarMoeda(valor) {
+        if (!valor || valor === "---") return "---";
+        return parseFloat(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
     document.getElementById('xmlInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -42,62 +54,53 @@
         reader.onload = function(e) {
             const parser = new DOMParser();
             const xml = parser.parseFromString(e.target.result, "text/xml");
-            
             const getT = (tag, root = xml) => root.getElementsByTagName(tag)[0]?.textContent || "---";
 
             let res = "<h3>Dados Gerais e Emitente</h3>";
             res += `<div class='grid'>
                 ${cCard("Chave de Acesso", getT("chNFe"))}
                 ${cCard("Número da Nota", getT("nNF"))}
-                ${cCard("Data Emissão", getT("dhEmi").substring(0,10))}
-                ${cCard("Valor Total (vNF)", getT("vNF"))}
-                ${cCard("Nome Emitente", getT("xNome"))}
-                ${cCard("CNPJ Emitente", getT("CNPJ"))}
-                ${cCard("Inscr. Estadual (IE)", getT("IE"))}
+                ${cCard("Data Emissão", formatarDataBR(getT("dhEmi").substring(0,10)))}
+                ${cCard("Valor Total", formatarMoeda(getT("vNF")))}
+                ${cCard("Emitente", getT("xNome"))}
+                ${cCard("CNPJ", getT("CNPJ"))}
+                ${cCard("Inscr. Estadual", getT("IE"))}
             </div>`;
 
-            // Faturas (Cobranca)
+            // SEÇÃO DE COBRANÇA (FATURAS)
             const dups = xml.getElementsByTagName("dup");
             if(dups.length > 0) {
-                res += "<h3>Faturas e Vencimentos (Cobr)</h3><div class='grid'>";
+                res += "<h3>Dados de Cobrança (Faturas)</h3><div class='grid'>";
                 Array.from(dups).forEach(d => {
-                    const infoFatura = `Venc: ${getT("dVenc", d)} - Valor: ${getT("vDup", d)}`;
-                    res += cCard(`Parcela ${getT("nDup", d)}`, infoFatura);
+                    const vencimentoBR = formatarDataBR(getT("dVenc", d));
+                    const valorBR = formatarMoeda(getT("vDup", d));
+                    const nParcela = getT("nDup", d);
+                    
+                    res += cCard(`Parcela ${nParcela}`, `${vencimentoBR} - ${valorBR}`);
                 });
                 res += "</div>";
             }
 
-            // Itens da Nota
+            // SEÇÃO DE ITENS
             const itens = xml.getElementsByTagName("det");
             res += "<h3>Itens da Nota (Produtos)</h3>";
             res += "<table><thead><tr>" + 
-                   "<th>Item</th><th>Produto (xProd)</th><th>EAN</th><th>NCM</th><th>CEST</th><th>CFOP</th><th>Qtd</th><th>V. Unit</th><th>Copiar</th>" +
+                   "<th>Item</th><th>Produto</th><th>EAN</th><th>NCM</th><th>CEST</th><th>CFOP</th><th>Qtd</th><th>V. Unit</th>" +
                    "</tr></thead><tbody>";
 
             Array.from(itens).forEach(i => {
                 const nItem = i.getAttribute("nItem");
                 const p = i.getElementsByTagName("prod")[0];
                 
-                const d = {
-                    nome: getT("xProd", p),
-                    ean: getT("cEAN", p),
-                    ncm: getT("NCM", p),
-                    cest: getT("CEST", p),
-                    cfop: getT("CFOP", p),
-                    qtd: getT("qCom", p),
-                    vUnit: getT("vUnCom", p)
-                };
-
                 res += `<tr>
                     <td>${nItem}</td>
-                    <td>${d.nome}</td>
-                    <td>${d.ean}</td>
-                    <td>${d.ncm}</td>
-                    <td>${d.cest}</td>
-                    <td>${d.cfop}</td>
-                    <td>${d.qtd}</td>
-                    <td>${d.vUnit}</td>
-                    <td class="copy-cell"><button onclick="copiar('${d.nome} | Qtd: ${d.qtd} | Val: ${d.vUnit}')">Resumo</button></td>
+                    <td>${getT("xProd", p)}</td>
+                    <td>${getT("cEAN", p)}</td>
+                    <td>${getT("NCM", p)}</td>
+                    <td>${getT("CEST", p)}</td>
+                    <td>${getT("CFOP", p)}</td>
+                    <td>${getT("qCom", p)}</td>
+                    <td>${formatarMoeda(getT("vUnCom", p))}</td>
                 </tr>`;
             });
             res += "</tbody></table>";
@@ -109,15 +112,13 @@
 
     function cCard(label, valor) {
         return `<div class="card">
-            <div><span class="label">${label}</span><span class="value" id="val-${label}">${valor}</span></div>
+            <div><span class="label">${label}</span><span class="value">${valor}</span></div>
             <button onclick="copiar('${valor}')">Copiar</button>
         </div>`;
     }
 
     function copiar(t) {
-        navigator.clipboard.writeText(t).then(() => {
-            console.log("Copiado: " + t);
-        });
+        navigator.clipboard.writeText(t);
     }
 </script>
 </body>
