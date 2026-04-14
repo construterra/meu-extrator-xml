@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Extrator de XML Simples</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; max-width: 600px; margin: auto; background: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .field-box { display: flex; justify-content: space-between; align-items: center; background: #eee; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+        button { cursor: pointer; background: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 3px; }
+        button:hover { background: #0056b3; }
+        input[type="file"] { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Extrair Dados do XML</h2>
+        <input type="file" id="xmlInput" accept=".xml">
+        <div id="resultado"></div>
+    </div>
+
+    <script>
+        document.getElementById('xmlInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(e.target.result, "text/xml");
+                
+                // --- CONFIGURAÇÃO DOS CAMPOS ---
+                // Aqui você me dirá quais nomes aparecem no seu XML
+                const camposParaExtrair = ["nome", "valor", "data", "placa"]; 
+                
+                let htmlGerado = "";
+
+                camposParaExtrair.forEach(campo => {
+                    const elemento = xmlDoc.getElementsByTagName(campo)[0];
+                    const valor = elemento ? elemento.textContent : "Não encontrado";
+                    
+                    htmlGerado += `
+                        <div class="field-box">
+                            <span><strong>${campo.toUpperCase()}:</strong> ${valor}</span>
+                            <button onclick="copiarTexto('${valor}')">Copiar</button>
+                        </div>`;
+                });
+
+                document.getElementById('resultado').innerHTML = htmlGerado;
+            };
+            reader.readAsText(file);
+        });
+
+        function copiarTexto(texto) {
+            navigator.clipboard.writeText(texto);
+            alert("Copiado: " + texto);
+        }
+    </script>
+</body>
+</html>
